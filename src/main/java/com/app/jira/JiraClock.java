@@ -1,7 +1,5 @@
 package com.app.jira;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
 import org.xml.sax.SAXException;
 
@@ -15,16 +13,13 @@ import java.io.IOException;
 
 public class JiraClock {
 
-    private static Logger LOG = LoggerFactory.getLogger(JiraClock.class);
-    public static final String xmlFilePath = "C:\\Dev\\Java\\Jira\\xmlfile.xml";
-
-    public JiraDocument jiraDoc = new JiraDocument(xmlFilePath);
+    public static final String xmlFilePath = System.getProperty("user.dir")+"\\xmlfile.xml";
 
     public static void main(String[] args) throws ParserConfigurationException, TransformerException {
-        LOG.info("EXECUTING : command line runner");
         for (int i = 0; i < args.length; ++i) {
-            LOG.info("args[{}]: {}", i, args[i]);
+            System.out.println (String.format("args[%s]: %s", i, args[i]));
         }
+        JiraDocument jiraDoc = JiraDocument.getInstance(xmlFilePath);
         DocumentBuilderFactory documentFactory = DocumentBuilderFactory.newInstance();
         documentFactory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
         DocumentBuilder documentBuilder = documentFactory.newDocumentBuilder();
@@ -39,7 +34,8 @@ public class JiraClock {
             }else{
                 doc = documentBuilder.newDocument();
             }
-            jiraDoc.createNewDocument(doc);
+            //jiraDoc.createNewDocument(doc, "ISSUE-1251", "fazendo x");
+            jiraDoc.createNewDocument(doc, args[0], args[1]);
 
         } catch (SAXException e) {
             e.printStackTrace();

@@ -14,13 +14,23 @@ import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import java.io.File;
 import java.io.IOException;
+import java.util.Date;
 
-public class JiraDocument {
 
-    String xmlFilePath;
+public final class JiraDocument {
+
+    private final String xmlFilePath;
+    private static JiraDocument instance;
 
     public JiraDocument(String xmlFilePath) {
-        this.xmlFilePath = xmlFilePath
+        this.xmlFilePath = xmlFilePath;
+    }
+
+    public static JiraDocument getInstance(String xmlFilePath){
+        if(instance == null){
+            instance = new JiraDocument(xmlFilePath);
+        }
+        return instance;
     }
 
     protected Document loadXmlDocument(File xmlFile, DocumentBuilder documentBuilder) throws SAXException, IOException {
@@ -32,58 +42,56 @@ public class JiraDocument {
         return doc;
     }
 
-    protected void createNewDocument(Document document) throws TransformerException {
-        JiraDocument.populateXmlDocument(document);
-        JiraDocument.saveXmlFile(document);
+    protected void createNewDocument(Document document, String issue, String value) throws TransformerException {
+        populateXmlDocument(document, issue, value);
+        saveXmlFile(document);
         System.out.println("Done creating XML File");
     }
 
-    private static void populateXmlDocument(Document document) {
-        Element root = JiraDocument.createOrSearchRootElement(document);
-        // employee element
-        Element employee = document.createElement("employee");
+    private void populateXmlDocument(Document document, String issue, String value) {
+        Date date = new Date();
 
-        root.appendChild(employee);
+        Element root = createOrSearchRootElement(document, "Jira");
 
-        // set an attribute to staff element
-        Attr attr = document.createAttribute("id");
-        attr.setValue("10");
-        employee.setAttributeNode(attr);
+        Element monthEntry = createOrSearchElement(document, root,"month"+String.valueOf(date.getMonth()));
+        Element dayEntry = createOrSearchElement(document, monthEntry,"day"+String.valueOf(date.getDay()));
+        Element issueEntry = createOrSearchElement(document, dayEntry, issue);
 
-        // firstname element
-        Element firstName = document.createElement("firstname");
-        firstName.appendChild(document.createTextNode("James"));
-        employee.appendChild(firstName);
+        Attr attr = document.createAttribute("date");
+        attr.setValue(date.toString());
+        issueEntry.setAttributeNode(attr);
 
-        // lastname element
-        Element lastname = document.createElement("lastname");
-        lastname.appendChild(document.createTextNode("Harley"));
-        employee.appendChild(lastname);
+        Element entryValue = document.createElement("issue");
+        entryValue.appendChild(document.createTextNode(value));
+        issueEntry.appendChild(entryValue);
 
-        // email element
-        Element email = document.createElement("email");
-        email.appendChild(document.createTextNode("james@example.org"));
-        employee.appendChild(email);
-
-        // department elements
-        Element department = document.createElement("department");
-        department.appendChild(document.createTextNode("Human Resources"));
-        employee.appendChild(department);
     }
 
-    private static Element createOrSearchRootElement(Document document) {
-        NodeList nodeRoot = document.getElementsByTagName("company");
+    private Element createOrSearchRootElement(Document document, String element) {
+        NodeList nodeRoot = document.getElementsByTagName(element);
         Element root;
         if (nodeRoot.getLength() > 0) {
-            root = nodeRoot.item(0).getOwnerDocument().getDocumentElement();
+            root = (Element) nodeRoot.item(0);
         } else {
-            root = document.createElement("company");
+            root = document.createElement(element);
             document.appendChild(root);
         }
         return root;
     }
 
-    private static void saveXmlFile(Document document) throws TransformerException {
+    private Element createOrSearchElement(Document document, Element rootElement, String element) {
+        NodeList nodeRoot = document.getElementsByTagName(element);
+        Element root;
+        if (nodeRoot.getLength() > 0) {
+            root = (Element) nodeRoot.item(0);
+        } else {
+            root = document.createElement(element);
+            rootElement.appendChild(root);
+        }
+        return root;
+    }
+
+    private void saveXmlFile(Document document) throws TransformerException {
         TransformerFactory transformerFactory = TransformerFactory.newInstance();
         Transformer transformer = transformerFactory.newTransformer();
         DOMSource domSource = new DOMSource(document);
