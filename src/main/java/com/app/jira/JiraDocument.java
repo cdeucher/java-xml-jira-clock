@@ -42,13 +42,13 @@ public final class JiraDocument {
         return doc;
     }
 
-    protected void createNewDocument(Document document, String issue, String value) throws TransformerException {
-        populateXmlDocument(document, issue, value);
+    protected void createNewDocument(Document document, String command, String issue, String value) throws TransformerException {
+        populateXmlDocument(document, command, issue, value);
         saveXmlFile(document);
         System.out.println("Done creating XML File");
     }
 
-    private void populateXmlDocument(Document document, String issue, String value) {
+    private void populateXmlDocument(Document document, String command, String issue, String value) {
         Date date = new Date();
 
         Element root = createOrSearchRootElement(document, "Jira");
@@ -57,12 +57,17 @@ public final class JiraDocument {
         Element dayEntry = createOrSearchElement(document, monthEntry,"day"+String.valueOf(date.getDay()));
         Element issueEntry = createOrSearchElement(document, dayEntry, issue);
 
-        Attr attr = document.createAttribute("date");
-        attr.setValue(date.toString());
-        issueEntry.setAttributeNode(attr);
-
         Element entryValue = document.createElement("issue");
         entryValue.appendChild(document.createTextNode(value));
+
+        Attr attrCommand = document.createAttribute("action");
+        attrCommand.setValue(command);
+        entryValue.setAttributeNode(attrCommand);
+
+        Attr attr = document.createAttribute("date");
+        attr.setValue(date.toString());
+        entryValue.setAttributeNode(attr);
+
         issueEntry.appendChild(entryValue);
 
     }
