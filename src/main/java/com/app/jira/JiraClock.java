@@ -1,6 +1,7 @@
 package com.app.jira;
 
 import org.w3c.dom.Document;
+import org.w3c.dom.Element;
 import org.xml.sax.SAXException;
 
 import javax.xml.XMLConstants;
@@ -14,6 +15,7 @@ import java.io.IOException;
 public class JiraClock {
 
     public static final String xmlFilePath = System.getProperty("user.home")+"\\.jiraXmlfile.xml";
+    //public static final String xmlFilePath = System.getProperty("user.dir")+"\\.jiraXmlfile.xml";
 
     public static void main(String[] args) throws ParserConfigurationException, TransformerException {
         System.out.println(String.format("Path: %s", xmlFilePath));
@@ -21,6 +23,9 @@ public class JiraClock {
             System.out.println ("Command Args: [start/stop] [issue number] [comment]");
             return;
         }
+        String command = args[0];
+        String issue = (args.length >= 2) ?  args[1]  : "";
+        String comment = (args.length >= 3) ? args[2] : "";
 
         for (int i = 0; i < args.length; ++i) {
             System.out.println (String.format("args[%s]: %s", i, args[i]));
@@ -40,9 +45,14 @@ public class JiraClock {
             }else{
                 doc = documentBuilder.newDocument();
             }
-            //jiraDoc.createNewDocument(doc, "start","ISSUE-1251", "fazendo start");
-            //jiraDoc.createNewDocument(doc, "stop","ISSUE-1251", "fazendo stop");
-            jiraDoc.createNewDocument(doc, args[0], args[1], args[2]);
+            Element currentDocument = jiraDoc.searchElementByName(doc, "Jira");
+            if(issue.isEmpty()) {
+                if (currentDocument != null)
+                    issue = jiraDoc.getCurrentIssue(currentDocument);
+                    if (issue.isEmpty())
+                        throw new RuntimeException("Issue isEmpty");
+            }
+            jiraDoc.createNewDocument(doc, command, issue, comment);
 
         } catch (SAXException e) {
             e.printStackTrace();
