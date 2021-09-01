@@ -7,22 +7,15 @@ import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
 import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
-import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
+import java.sql.Timestamp;
 import java.time.LocalDate;
-import java.time.Month;
-import java.util.Calendar;
-import java.util.Date;
 
 
 public final class JiraDocument {
@@ -56,11 +49,10 @@ public final class JiraDocument {
         System.out.println("Done creating XML File");
     }
 
-    private void populateXmlDocument(Document document, String command, String issue, String value) {
+    private void populateXmlDocument(Document document, String command, String issue, String comment) {
         LocalDate localDate = getLocalDate();
 
-
-        Element root = createOrSearchRootElement(document, "Jira");
+        Element root = createOrSearchRootDocument(document, "Jira");
 
         setCurrentIssue(document, root, issue);
 
@@ -68,29 +60,66 @@ public final class JiraDocument {
         Element dayEntry = createOrSearchElement(document, monthEntry,"day"+String.valueOf(localDate.getDayOfMonth()));
         Element issueEntry = createOrSearchElement(document, dayEntry, issue);
 
-        Element entryValue = document.createElement("issue");
-        entryValue.appendChild(document.createTextNode(value));
-
-        Attr attrCommand = document.createAttribute("action");
-        attrCommand.setValue(command);
-        entryValue.setAttributeNode(attrCommand);
-
-        Attr attr = document.createAttribute("date");
-        attr.setValue(getDateWithoutTimeUsingCalendar().toString());
-        entryValue.setAttributeNode(attr);
-
-        issueEntry.appendChild(entryValue);
+        updateAttributeOrCreateNewOne(document, command, comment, issueEntry);
 
     }
 
-    public static Date getDateWithoutTimeUsingCalendar() {
-        Calendar calendar = Calendar.getInstance();
-        return calendar.getTime();
+    private void updateAttributeOrCreateNewOne(Document document, String command, String comment, Element issueEntry) {
+        Element lastIssue = createOrSearchElement(document, issueEntry, "issue");
+        String startIssue = getAttributeValue(lastIssue,ActionEnum.START.toString());
+        String stopIssue  = getAttributeValue(lastIssue,ActionEnum.STOP.toString());
+
+        if(command.equals(ActionEnum.START.toString()) && !startIssue.isEmpty() && !stopIssue.isEmpty()){
+            setMinutes(document, lastIssue, startIssue, stopIssue);
+
+            Element entryValue = document.createElement("issue");
+            addNewEntryIssue(document, comment, issueEntry, entryValue);
+        }else if(command.equals(ActionEnum.START.toString()) && startIssue.isEmpty()) {
+            addNewEntryIssue(document, comment, issueEntry, lastIssue);
+        }else if(command.equals(ActionEnum.STOP.toString()) && stopIssue.isEmpty()) {
+            closeEntryIssue(document, command, lastIssue);
+        }else{
+            throw new RuntimeException(String.format("Invalid command! start:%s, stop:%s", startIssue.toString(),stopIssue.toString()));
+        }
     }
 
-    public static Date getDateWithoutTimeUsingFormat() throws ParseException {
-        SimpleDateFormat formatter = new SimpleDateFormat("dd/MM/yyyy");
-        return formatter.parse(formatter.format(new Date()));
+    private void setMinutes(Document document, Element lastIssue, String startIssue, String stopIssue) {
+        int minutes = extractMinutesFromIssue(startIssue, stopIssue);
+        setMinutesToIssue(document, lastIssue, minutes);
+    }
+
+    private int extractMinutesFromIssue(String startIssue, String stopIssue) {
+        Timestamp start = new Timestamp(Long.parseLong(startIssue));
+        Timestamp stop = new Timestamp(Long.parseLong(stopIssue));
+        Long diff = stop.getTime() - start.getTime();
+        int minutes = (int) ((diff / (1000*60)) % 60);
+        return minutes;
+    }
+
+    private void closeEntryIssue(Document document, String command, Element lastIssue){
+        Attr attrCommand = document.createAttribute(command);
+        attrCommand.setValue(getDateWithoutTimeUsingCalendar().toString());
+        lastIssue.setAttributeNode(attrCommand);
+    }
+
+    private void setMinutesToIssue(Document document, Element lastIssue, int minutes){
+        Attr attrCommand = document.createAttribute("Minutes");
+        attrCommand.setValue(String.valueOf(minutes));
+        lastIssue.setAttributeNode(attrCommand);
+    }
+
+    private void addNewEntryIssue(Document document, String comment, Element issueEntry, Element lastIssue) {
+        issueEntry.appendChild(lastIssue);
+        lastIssue.appendChild(document.createTextNode(comment));
+
+        Attr attrCommand = document.createAttribute(ActionEnum.START.toString());
+        attrCommand.setValue(getDateWithoutTimeUsingCalendar().toString());
+        lastIssue.setAttributeNode(attrCommand);
+    }
+
+    public static Long getDateWithoutTimeUsingCalendar() {
+        Timestamp timestamp = new Timestamp(System.currentTimeMillis());
+        return timestamp.getTime();
     }
 
     public static LocalDate getLocalDate() {
@@ -103,11 +132,11 @@ public final class JiraDocument {
         root.setAttributeNode(attrCurrentIssue);
     }
 
-    public static String getCurrentIssue(Element root){
-        return root.getAttribute("currentIssue");
+    public static String getAttributeValue(Element element, String attribute){
+        return element.getAttribute(attribute);
     }
 
-    private Element createOrSearchRootElement(Document document, String element) {
+    private Element createOrSearchRootDocument(Document document, String element) {
         NodeList nodeRoot = document.getElementsByTagName(element);
         Element root;
         if (nodeRoot.getLength() > 0) {
@@ -120,7 +149,7 @@ public final class JiraDocument {
     }
 
     private Element createOrSearchElement(Document document, Element rootElement, String element) {
-        Element root = searchElementByName(document, element);
+        Element root = searchElementByName(rootElement, element);
         if (root == null) {
             root = document.createElement(element);
             rootElement.appendChild(root);
@@ -128,10 +157,18 @@ public final class JiraDocument {
         return root;
     }
 
-    public static Element searchElementByName(Document document, String attribute){
+    public static Element searchElementByName(Document document, String attribute) {
         NodeList nodeRoot = document.getElementsByTagName(attribute);
         if (nodeRoot.getLength() > 0)
             return (Element) nodeRoot.item(0);
+        else
+            return null;
+    }
+
+    public static Element searchElementByName(Element rootElement, String attribute) {
+        NodeList nodeRoot = rootElement.getElementsByTagName(attribute);
+        if (nodeRoot.getLength() > 0)
+            return (Element) nodeRoot.item(nodeRoot.getLength()-1);
         else
             return null;
     }

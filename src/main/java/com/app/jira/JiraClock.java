@@ -14,7 +14,7 @@ import java.io.IOException;
 
 public class JiraClock {
 
-    public static final String xmlFilePath = System.getProperty("user.home")+"\\.jiraXmlfile.xml";
+    public static final String xmlFilePath = System.getProperty("user.home")+"/.jiraXmlfile.xml";
     //public static final String xmlFilePath = System.getProperty("user.dir")+"\\.jiraXmlfile.xml";
 
     public static void main(String[] args) throws ParserConfigurationException, TransformerException {
@@ -23,8 +23,8 @@ public class JiraClock {
             System.out.println ("Command Args: [start/stop] [issue number] [comment]");
             return;
         }
-        String command = args[0];
-        String issue = (args.length >= 2) ?  args[1]  : "";
+        String command = (args[0].toUpperCase().equals("START")) ? ActionEnum.START.toString() : ActionEnum.STOP.toString();
+        String issue = (args.length >= 2) ?  args[1].toUpperCase()  : "";
         String comment = (args.length >= 3) ? args[2] : "";
 
         for (int i = 0; i < args.length; ++i) {
@@ -48,7 +48,7 @@ public class JiraClock {
             Element currentDocument = jiraDoc.searchElementByName(doc, "Jira");
             if(issue.isEmpty()) {
                 if (currentDocument != null)
-                    issue = jiraDoc.getCurrentIssue(currentDocument);
+                    issue = jiraDoc.getAttributeValue(currentDocument, "currentIssue");
                     if (issue.isEmpty())
                         throw new RuntimeException("Issue isEmpty");
             }
