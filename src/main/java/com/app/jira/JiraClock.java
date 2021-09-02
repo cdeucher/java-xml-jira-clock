@@ -11,6 +11,9 @@ import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.TransformerException;
 import java.io.File;
 import java.io.IOException;
+import java.time.LocalDate;
+
+import static com.app.jira.JiraDocument.getLocalDate;
 
 public class JiraClock {
 
@@ -23,7 +26,7 @@ public class JiraClock {
             System.out.println ("Command Args: [start/stop] [issue number] [comment]");
             return;
         }
-        String command = (args[0].toUpperCase().equals("START")) ? ActionEnum.START.toString() : ActionEnum.STOP.toString();
+        String command = getCommandFromArgs(args);
         String issue = (args.length >= 2) ?  args[1].toUpperCase()  : "";
         String comment = (args.length >= 3) ? args[2] : "";
 
@@ -45,20 +48,42 @@ public class JiraClock {
             }else{
                 doc = documentBuilder.newDocument();
             }
-            Element currentDocument = jiraDoc.searchElementByName(doc, "Jira");
-            if(issue.isEmpty()) {
-                if (currentDocument != null)
-                    issue = jiraDoc.getAttributeValue(currentDocument, "currentIssue");
-                    if (issue.isEmpty())
-                        throw new RuntimeException("Issue isEmpty");
-            }
-            jiraDoc.createNewDocument(doc, command, issue, comment);
+
+            if(command == ActionEnum.LIST.toString())
+                listIssues(jiraDoc, doc);
+            else
+                newDocument(command, issue, comment, jiraDoc, doc);
 
         } catch (SAXException e) {
             e.printStackTrace();
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    private static void listIssues(JiraDocument jiraDoc, Document doc) {
+        LocalDate localDate = getLocalDate();
+        jiraDoc.listMonths(doc, "month"+String.valueOf(localDate.getMonthValue()));
+    }
+
+    private static void newDocument(String command, String issue, String comment, JiraDocument jiraDoc, Document doc) throws TransformerException {
+        Element currentDocument = jiraDoc.searchElementByName(doc, "Jira");
+        if(issue.isEmpty()) {
+            if (currentDocument != null)
+                issue = jiraDoc.getAttributeValue(currentDocument, "currentIssue");
+                if (issue.isEmpty())
+                    throw new RuntimeException("Issue isEmpty");
+        }
+        jiraDoc.createNewDocument(doc, command, issue, comment);
+    }
+
+    private static String getCommandFromArgs(String[] args) {
+        if(args[0].toUpperCase().equals(ActionEnum.START.toString()))
+            return ActionEnum.START.toString();
+        else if(args[0].toUpperCase().equals(ActionEnum.STOP.toString()))
+            return ActionEnum.STOP.toString();
+        else
+            return ActionEnum.LIST.toString();
     }
 
 
