@@ -1,5 +1,7 @@
 package com.app.jira;
 
+import java.util.Date;
+import java.util.concurrent.TimeUnit;
 import org.w3c.dom.*;
 import org.xml.sax.SAXException;
 
@@ -109,8 +111,11 @@ public final class JiraDocument {
         for (int i = 0; i < issueEntrys.getLength(); i++) {
             issue = (Element) issueEntrys.item(i);
 
+            String startIssue = getAttributeValue(issue,ActionEnum.START.toString());
+            String stopIssue  = getAttributeValue(issue,ActionEnum.STOP.toString());
+
             System.out.println(String.format(" Issue (%s) : %s -> %s , %s"
-                    , getAttributeValue(issue,"Minutes")
+                    , extractMinutesFromIssue(startIssue, stopIssue)
                     , convertTimestampToDate( getAttributeValue(issue,"START"))
                     , convertTimestampToDate( getAttributeValue(issue,"STOP"))
                     , issue.getTextContent() ));
@@ -123,8 +128,6 @@ public final class JiraDocument {
         String stopIssue  = getAttributeValue(lastIssue,ActionEnum.STOP.toString());
 
         if(command.equals(ActionEnum.START.toString()) && !startIssue.isEmpty() && !stopIssue.isEmpty()){
-            setMinutes(document, lastIssue, startIssue, stopIssue);
-
             Element entryValue = document.createElement("issue");
             addNewEntryIssue(document, comment, issueEntry, entryValue);
         }else if(command.equals(ActionEnum.START.toString()) && startIssue.isEmpty()) {
@@ -142,11 +145,22 @@ public final class JiraDocument {
     }
 
     private int extractMinutesFromIssue(String startIssue, String stopIssue) {
-        Timestamp start = new Timestamp(Long.parseLong(startIssue));
-        Timestamp stop = new Timestamp(Long.parseLong(stopIssue));
-        Long diff = stop.getTime() - start.getTime();
-        int minutes = (int) ((diff / (1000*60)) % 60);
-        return minutes;
+        try {
+            Timestamp start = new Timestamp(Long.parseLong(startIssue));
+            Timestamp stop = new Timestamp(Long.parseLong(stopIssue));
+
+            Date date1 = new Date();
+            Date date2 = new Date();
+            date1.setTime(start.getTime());
+            date2.setTime(stop.getTime());
+
+            long diffInMillies = Math.abs(date1.getTime() - date2.getTime());
+            long diff = TimeUnit.MINUTES.convert(diffInMillies, TimeUnit.MILLISECONDS);
+
+            return Integer.parseInt(String.valueOf(diff));
+        }catch (Exception e){
+            return 0;
+        }
     }
 
     private Timestamp convertTimestampToDate(String timestamp){
