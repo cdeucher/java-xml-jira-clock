@@ -6,7 +6,10 @@ import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
+import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
@@ -21,9 +24,11 @@ public final class JiraDocument {
 
     private final String xmlFilePath;
     private static JiraDocument instance;
+    private Document doc;
 
     public JiraDocument(String xmlFilePath) {
         this.xmlFilePath = xmlFilePath;
+        this.initialState();
     }
 
     public static JiraDocument getInstance(String xmlFilePath){
@@ -33,8 +38,26 @@ public final class JiraDocument {
         return instance;
     }
 
-    protected Document loadXmlDocument(File xmlFile, DocumentBuilder documentBuilder) throws SAXException, IOException {
-        Document doc = documentBuilder.parse(xmlFile);
+    private void initialState() {
+        try {
+            DocumentBuilderFactory documentFactory = DocumentBuilderFactory.newInstance();
+            documentFactory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+            DocumentBuilder documentBuilder = documentFactory.newDocumentBuilder();
+
+            File xmlFile = new File(xmlFilePath);
+            boolean exists = xmlFile.exists();
+            if (exists) {
+                doc = loadXmlDocument(documentBuilder);
+            } else {
+                doc = documentBuilder.newDocument();
+            }
+        }catch (IOException | SAXException | ParserConfigurationException e){
+            e.printStackTrace();
+        }
+    }
+
+    protected Document loadXmlDocument(DocumentBuilder documentBuilder) throws SAXException, IOException {
+        Document doc = documentBuilder.parse(xmlFilePath);
         doc.getDocumentElement().normalize();
 
         System.out.println("Root Element :" + doc.getDocumentElement().getNodeName());
@@ -42,19 +65,57 @@ public final class JiraDocument {
         return doc;
     }
 
-    private void populateXmlDocument(Document document, String command, String issue, String comment) {
-        Element root = createOrSearchRootDocument(document, "Jira");
+    private void populateXmlDocument(Element rootDocument, String command, String issue, String comment) {
+        setAttributeValue(rootDocument, issue, "currentIssue");
 
-        setCurrentIssue(document, root, issue);
+        Element monthEntry = createOrSearchElement(doc, rootDocument,"month"+ Util.getLocalDate().getMonthValue());
+        Element dayEntry = searchElementByAttribute(monthEntry, "day","ITEM", String.valueOf(Util.getLocalDate().getDayOfMonth()));
+        if( Objects.isNull(dayEntry) )
+            dayEntry = createNewElementWithAttr(doc, monthEntry,"day",String.valueOf(Util.getLocalDate().getDayOfMonth()));
+        Element issueEntry = createOrSearchElement(doc, dayEntry, issue);
 
-        Element monthEntry = createOrSearchElement(document, root,"month"+ Util.getLocalDate().getMonthValue());
-        Element dayEntry = searchElementByAttribute(monthEntry, "day",String.valueOf(Util.getLocalDate().getDayOfMonth()));
-        if(dayEntry == null)
-            dayEntry = createNewElementWithAttr(document, monthEntry,"day",String.valueOf(Util.getLocalDate().getDayOfMonth()));
-        Element issueEntry = createOrSearchElement(document, dayEntry, issue);
+        processCommandCmd(command, comment, issueEntry, monthEntry);
 
-        updateAttributeOrCreateNewOne(document, command, comment, issueEntry);
+    }
 
+    private void processCommandCmd(String command, String comment, Element issueEntry, Element monthEntry) {
+        Element lastIssue = getElementByName(monthEntry, "issue");
+        if( Objects.isNull(lastIssue) )
+            lastIssue = createOrSearchElement(doc, issueEntry, "issue");
+
+        String startIssue = getAttributeValue(lastIssue, ActionEnum.START.toString());
+        String stopIssue = getAttributeValue(lastIssue, ActionEnum.STOP.toString());
+
+        if(command.equals(ActionEnum.START.toString())){
+            Element newIssue = (getAttributeValue(lastIssue,"ID").isEmpty()) ? lastIssue : doc.createElement("issue");
+            setIssueId(lastIssue, newIssue);
+            addNewEntryIssue(doc, comment, issueEntry, newIssue);
+        }else if(command.equals(ActionEnum.STOP.toString()) && stopIssue.isEmpty() && !startIssue.isEmpty()) {
+            closeEntryIssue(doc, command, lastIssue);
+        }else{
+            throw new RuntimeException(String.format("Invalid command! start:%s, stop:%s", startIssue, stopIssue));
+        }
+    }
+
+    private void setIssueId(Element lastIssue, Element newIssue) {
+        String id = getAttributeValue(lastIssue,"ID");
+        int issueId = id.isBlank() ? 1 : Integer.parseInt(id)+1;
+        setAttributeValue(newIssue, "ID", String.valueOf(issueId));
+    }
+
+    private void closeEntryIssue(Document document, String command, Element lastIssue){
+        Attr attrCommand = document.createAttribute(command);
+        attrCommand.setValue(Util.getDateWithoutTimeUsingCalendar().toString());
+        lastIssue.setAttributeNode(attrCommand);
+    }
+
+    private void addNewEntryIssue(Document document, String comment, Element issueEntry, Element lastIssue) {
+        issueEntry.appendChild(lastIssue);
+        lastIssue.appendChild(document.createTextNode(comment));
+
+        Attr attrCommand = document.createAttribute(ActionEnum.START.toString());
+        attrCommand.setValue(Util.getDateWithoutTimeUsingCalendar().toString());
+        lastIssue.setAttributeNode(attrCommand);
     }
 
     private Element createNewElementWithAttr(Document document, Element rootElement, String tag, String attr) {
@@ -97,7 +158,8 @@ public final class JiraDocument {
             String startIssue = getAttributeValue(issue,ActionEnum.START.toString());
             String stopIssue  = getAttributeValue(issue,ActionEnum.STOP.toString());
 
-            System.out.printf(" Issue (%s) : %s -> %s , %s%n"
+            System.out.printf(" Issue :%s (%s) %s -> %s , %s%n"
+                    , getAttributeValue(issue,"ID")
                     , Util.extractTimeFromIssue(startIssue, stopIssue)
                     , Util.convertTimestampToDate( getAttributeValue(issue,"START"))
                     , Util.convertTimestampToDate( getAttributeValue(issue,"STOP"))
@@ -105,64 +167,36 @@ public final class JiraDocument {
         }
     }
 
-    protected void generateIssuesReport(Document document, String month) {
-        Element root = createOrSearchRootDocument(document, "Jira");
-        Element monthEntry = getElementByName(root, month);
+    protected void generateIssuesReport(String month) {
+        Element rootDocument = createOrSearchRootDocument(doc, "Jira");
+        Element monthEntry = getElementByName(rootDocument, month);
 
         listDays(monthEntry);
     }
 
-    protected void addNewIssue(Document doc, String command, String issue, String comment) {
-        Element currentDocument = searchElementByName(doc, "Jira");
-        if(issue.isEmpty()) {
-            if (currentDocument != null)
-                issue = getAttributeValue(currentDocument, "currentIssue");
-            if (issue.isEmpty())
-                throw new RuntimeException("Issue isEmpty");
-        }
+    protected void addNewIssue(String command, String issue, String comment) {
+        Element rootDocument = createOrSearchRootDocument(doc, "Jira");
+        if(issue.isEmpty())
+            issue = checkCurrentIssue(rootDocument);
+
         try {
-            populateXmlDocument(doc, command, issue, comment);
+            populateXmlDocument(rootDocument, command, issue, comment);
         }catch (Exception e){
             e.printStackTrace();
         }
     }
 
-    private void updateAttributeOrCreateNewOne(Document document, String command, String comment, Element issueEntry) {
-        Element lastIssue = createOrSearchElement(document, issueEntry, "issue");
-        String startIssue = getAttributeValue(lastIssue,ActionEnum.START.toString());
-        String stopIssue  = getAttributeValue(lastIssue,ActionEnum.STOP.toString());
-
-        if(command.equals(ActionEnum.START.toString()) && !startIssue.isEmpty() && !stopIssue.isEmpty()){
-            Element entryValue = document.createElement("issue");
-            addNewEntryIssue(document, comment, issueEntry, entryValue);
-        }else if(command.equals(ActionEnum.START.toString()) && startIssue.isEmpty()) {
-            addNewEntryIssue(document, comment, issueEntry, lastIssue);
-        }else if(command.equals(ActionEnum.STOP.toString()) && stopIssue.isEmpty() && !startIssue.isEmpty()) {
-            closeEntryIssue(document, command, lastIssue);
-        }else{
-            throw new RuntimeException(String.format("Invalid command! start:%s, stop:%s", startIssue, stopIssue));
-        }
+    private String checkCurrentIssue(Element rootDocument) {
+        String issue = getAttributeValue(rootDocument, "currentIssue");
+        if (issue.isEmpty())
+            throw new RuntimeException("Document isEmpty");
+        return issue;
     }
 
-    private void closeEntryIssue(Document document, String command, Element lastIssue){
-        Attr attrCommand = document.createAttribute(command);
-        attrCommand.setValue(Util.getDateWithoutTimeUsingCalendar().toString());
-        lastIssue.setAttributeNode(attrCommand);
-    }
-
-    private void addNewEntryIssue(Document document, String comment, Element issueEntry, Element lastIssue) {
-        issueEntry.appendChild(lastIssue);
-        lastIssue.appendChild(document.createTextNode(comment));
-
-        Attr attrCommand = document.createAttribute(ActionEnum.START.toString());
-        attrCommand.setValue(Util.getDateWithoutTimeUsingCalendar().toString());
-        lastIssue.setAttributeNode(attrCommand);
-    }
-
-    static void setCurrentIssue(Document document, Element root, String issue) {
-        Attr attrCurrentIssue = document.createAttribute("currentIssue");
-        attrCurrentIssue.setValue(issue);
-        root.setAttributeNode(attrCurrentIssue);
+    public void setAttributeValue(Element element, String attributeName, String attributeValue){
+        Attr attrCurrentIssue = doc.createAttribute(attributeName);
+        attrCurrentIssue.setValue(String.valueOf(attributeValue));
+        element.setAttributeNode(attrCurrentIssue);
     }
 
     public static String getAttributeValue(Element element, String attribute){
@@ -198,14 +232,6 @@ public final class JiraDocument {
             return null;
     }
 
-    public static Element searchElementByName(Document document, String attribute) {
-        NodeList nodeRoot = document.getElementsByTagName(attribute);
-        if (nodeRoot.getLength() > 0)
-            return (Element) nodeRoot.item(0);
-        else
-            return null;
-    }
-
     public static NodeList searchElementByName(Element rootElement, String elementTag) {
         NodeList nodeRoot = rootElement.getElementsByTagName(elementTag);
         if (nodeRoot.getLength() > 0)
@@ -223,31 +249,45 @@ public final class JiraDocument {
         return listOfIssues;
     }
 
-    public static Element searchElementByAttribute(Element rootElement, String elementTag, String attribute) {
+    public static Element searchElementByAttribute(Element rootElement, String elementTag, String attributeName, String attributeValue) {
         NodeList nodeRoot = rootElement.getElementsByTagName(elementTag);
         if (nodeRoot.getLength() > 0) {
             Element element;
             String value;
             for(int i=0; i < nodeRoot.getLength(); i++){
                 element = (Element) nodeRoot.item(i);
-                value = getAttributeValue(element, "ITEM");
-                if(Integer.parseInt(value) == Integer.parseInt(attribute))
+                value = getAttributeValue(element, attributeName);
+                if(Integer.parseInt(value) == Integer.parseInt(attributeValue))
                     return element;
             }
         }
         return null;
     }
 
-    protected void saveXmlFile(Document document) {
+    protected void saveXmlFile() {
         try {
             TransformerFactory transformerFactory = TransformerFactory.newInstance();
             Transformer transformer = transformerFactory.newTransformer();
-            DOMSource domSource = new DOMSource(document);
+            DOMSource domSource = new DOMSource(doc);
             StreamResult streamResult = new StreamResult(new File(xmlFilePath));
             transformer.transform(domSource, streamResult);
             System.out.println("Done creating XML File");
         }catch (Exception e){
             e.printStackTrace();
         }
+    }
+
+    public void setIssueAttribute(String issueId, String attributeName, String attributeValue) {
+        Element rootDocument = createOrSearchRootDocument(doc, "Jira");
+        Element issue = searchElementByAttribute(rootDocument, "issue","ID",issueId);
+
+        setAttributeValue(issue,attributeName,attributeValue);
+    }
+
+    public void deleteIssue(String issueId) {
+        Element rootDocument = createOrSearchRootDocument(doc, "Jira");
+        Element issue = searchElementByAttribute(rootDocument, "issue","ID",issueId);
+
+        issue.getParentNode().removeChild(issue);
     }
 }
