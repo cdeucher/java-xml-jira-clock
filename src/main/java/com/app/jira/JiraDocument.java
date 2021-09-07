@@ -16,8 +16,7 @@ import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import java.io.File;
 import java.io.IOException;
-import java.util.HashSet;
-import java.util.Objects;
+import java.util.*;
 
 
 public final class JiraDocument {
@@ -26,9 +25,9 @@ public final class JiraDocument {
     private static JiraDocument instance;
     private Document doc;
 
-    public JiraDocument(String xmlFilePath) {
+    private JiraDocument(String xmlFilePath) {
         this.xmlFilePath = xmlFilePath;
-        this.initialState();
+        this.doc = initializeXmlFile();
     }
 
     public static JiraDocument getInstance(String xmlFilePath){
@@ -38,7 +37,7 @@ public final class JiraDocument {
         return instance;
     }
 
-    private void initialState() {
+    protected Document initializeXmlFile() {
         try {
             DocumentBuilderFactory documentFactory = DocumentBuilderFactory.newInstance();
             documentFactory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
@@ -47,12 +46,13 @@ public final class JiraDocument {
             File xmlFile = new File(xmlFilePath);
             boolean exists = xmlFile.exists();
             if (exists) {
-                doc = loadXmlDocument(documentBuilder);
+                return loadXmlDocument(documentBuilder);
             } else {
-                doc = documentBuilder.newDocument();
+                return documentBuilder.newDocument();
             }
         }catch (IOException | SAXException | ParserConfigurationException e){
             e.printStackTrace();
+            return null;
         }
     }
 
@@ -65,17 +65,12 @@ public final class JiraDocument {
         return doc;
     }
 
-    private void populateXmlDocument(Element rootDocument, String command, String issue, String comment) {
-        setAttributeValue(rootDocument, issue, "currentIssue");
+    protected Document getDocument(){
+        return doc;
+    }
 
-        Element monthEntry = createOrSearchElement(doc, rootDocument,"month"+ Util.getLocalDate().getMonthValue());
-        Element dayEntry = searchElementByAttribute(monthEntry, "day","ITEM", String.valueOf(Util.getLocalDate().getDayOfMonth()));
-        if( Objects.isNull(dayEntry) )
-            dayEntry = createNewElementWithAttr(doc, monthEntry,"day",String.valueOf(Util.getLocalDate().getDayOfMonth()));
-        Element issueEntry = createOrSearchElement(doc, dayEntry, issue);
-
-        processCommandCmd(command, comment, issueEntry, monthEntry);
-
+    protected void setDocument(Document newDoc){
+        doc = newDoc;
     }
 
     private void processCommandCmd(String command, String comment, Element issueEntry, Element monthEntry) {
@@ -129,28 +124,33 @@ public final class JiraDocument {
         return newElement;
     }
 
-    private void listDays(Element monthEntry) {
+    private Map<Integer, List> listDays(Element monthEntry) {
+        Map<Integer, List> report = new HashMap<>();
         NodeList days = searchElementByName(monthEntry, "day");
         Element day;
         for (int i = 0; i < Objects.requireNonNull(days).getLength(); i++) {
              day = (Element) days.item(i);
 
             System.out.printf(" Day %s%n",getAttributeValue(day,"ITEM"));
-            listIssues(day);
+            report.putAll(listIssues(day));
         }
+        return report;
     }
 
-    private void listIssues(Element dayEntry) {
+    private Map<Integer, List> listIssues(Element dayEntry) {
+        Map<Integer, List> report = new HashMap<>();
         HashSet<Element> issues = getIssuesByMounth(dayEntry);
         issues.forEach(issue -> {
             NodeList issueEntrys = searchElementByName(issue, "issue");
 
             System.out.printf(" Issue %s%n", issue.getNodeName());
-            listEntryIssues(issueEntrys);
+            report.putAll(listEntryIssues(issueEntrys));
         });
+        return report;
     }
 
-    private void listEntryIssues(NodeList issueEntrys) {
+    private Map<Integer, List> listEntryIssues(NodeList issueEntrys) {
+        Map<Integer, List> report = new HashMap<>();
         Element issue;
         for (int i = 0; i < issueEntrys.getLength(); i++) {
             issue = (Element) issueEntrys.item(i);
@@ -158,6 +158,8 @@ public final class JiraDocument {
             String startIssue = getAttributeValue(issue,ActionEnum.START.toString());
             String stopIssue  = getAttributeValue(issue,ActionEnum.STOP.toString());
 
+            Integer id = Integer.parseInt(getAttributeValue(issue,"ID"));
+            report.put(id, List.of(id, Util.extractTimeFromIssue(startIssue, stopIssue), issue.getTextContent()));
             System.out.printf(" Issue :%s (%s) %s -> %s , %s%n"
                     , getAttributeValue(issue,"ID")
                     , Util.extractTimeFromIssue(startIssue, stopIssue)
@@ -165,13 +167,16 @@ public final class JiraDocument {
                     , Util.convertTimestampToDate( getAttributeValue(issue,"STOP"))
                     , issue.getTextContent() );
         }
+        return report;
     }
 
-    protected void generateIssuesReport(String month) {
+    protected Map<Integer, List> generateIssuesReport(String month) {
+        Map<Integer, List> report = new HashMap<>();
         Element rootDocument = createOrSearchRootDocument(doc, "Jira");
         Element monthEntry = getElementByName(rootDocument, month);
 
-        listDays(monthEntry);
+        report.putAll(listDays(monthEntry));
+        return report;
     }
 
     protected void addNewIssue(String command, String issue, String comment) {
@@ -184,6 +189,19 @@ public final class JiraDocument {
         }catch (Exception e){
             e.printStackTrace();
         }
+    }
+
+    private void populateXmlDocument(Element rootDocument, String command, String issue, String comment) {
+        setAttributeValue(rootDocument, issue, "currentIssue");
+
+        Element monthEntry = createOrSearchElement(doc, rootDocument,"month"+ Util.getLocalDate().getMonthValue());
+        Element dayEntry = searchElementByAttribute(monthEntry, "day","ITEM", String.valueOf(Util.getLocalDate().getDayOfMonth()));
+        if( Objects.isNull(dayEntry) )
+            dayEntry = createNewElementWithAttr(doc, monthEntry,"day",String.valueOf(Util.getLocalDate().getDayOfMonth()));
+        Element issueEntry = createOrSearchElement(doc, dayEntry, issue);
+
+        processCommandCmd(command, comment, issueEntry, monthEntry);
+
     }
 
     private String checkCurrentIssue(Element rootDocument) {

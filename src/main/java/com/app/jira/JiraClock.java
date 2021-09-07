@@ -1,6 +1,10 @@
 package com.app.jira;
 
+import org.w3c.dom.Element;
+
 import javax.xml.parsers.ParserConfigurationException;
+import java.util.List;
+import java.util.Map;
 
 public class JiraClock {
 
@@ -25,6 +29,7 @@ public class JiraClock {
         for (int i = 0; i < args.length; ++i) {
             System.out.printf("args[%s]: %s%n", i, args[i]);
         }
+
         if(command.equals(ActionEnum.LIST.toString()))
             generateIssuesReport();
         else if(command.equals(ActionEnum.SET.toString()))
@@ -35,23 +40,24 @@ public class JiraClock {
             addNewIssue(command, issue, comment);
     }
 
+    private static void addNewIssue(String command, String tag, String comment) {
+        jiraDoc.addNewIssue(command, tag, comment);
+        jiraDoc.saveXmlFile();
+    }
+
     private static void deleteIssue(String issue) {
         jiraDoc.deleteIssue(issue);
         jiraDoc.saveXmlFile();
     }
 
-    private static void setIssueAttribute(String issue, String attributeName, String attributeValue) {
-        jiraDoc.setIssueAttribute(issue, attributeName, attributeValue);
+    private static void setIssueAttribute(String issueId, String attributeName, String attributeValue) {
+        jiraDoc.setIssueAttribute(issueId, attributeName, attributeValue);
         jiraDoc.saveXmlFile();
     }
 
     private static void generateIssuesReport() {
-        jiraDoc.generateIssuesReport("month"+ Util.getLocalDate().getMonthValue());
-    }
-
-    private static void addNewIssue(String command, String issue, String comment) {
-        jiraDoc.addNewIssue(command, issue, comment);
-        jiraDoc.saveXmlFile();
+        Map<Integer, List> report = jiraDoc.generateIssuesReport("month"+ Util.getLocalDate().getMonthValue());
+        report.forEach((key,item) -> System.out.printf(" %s ", item.toString()));
     }
 
     private static String getCommandFromArgs(String[] args) {
