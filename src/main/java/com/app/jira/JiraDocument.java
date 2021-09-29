@@ -44,8 +44,7 @@ public final class JiraDocument extends Report {
             DocumentBuilder documentBuilder = documentFactory.newDocumentBuilder();
 
             File xmlFile = new File(xmlFilePath);
-            boolean exists = xmlFile.exists();
-            if (exists) {
+            if (xmlFile.exists()) {
                 return loadXmlDocument(documentBuilder);
             } else {
                 return documentBuilder.newDocument();
@@ -137,7 +136,7 @@ public final class JiraDocument extends Report {
     }
 
     private void populateXmlDocument(Element rootDocument, String command, String issue, String comment) {
-        setAttributeValue(rootDocument, issue, "currentIssue");
+        setAttributeValue(rootDocument, "currentIssue", issue);
 
         Element monthEntry = createOrSearchElement(doc, rootDocument,"month"+ Util.getLocalDate().getMonthValue());
         Element dayEntry = searchElementByAttribute(monthEntry, "day","ITEM", String.valueOf(Util.getLocalDate().getDayOfMonth()));

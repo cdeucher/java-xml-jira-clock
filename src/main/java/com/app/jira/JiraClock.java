@@ -13,8 +13,8 @@ public class JiraClock {
         System.out.printf("Path: %s%n", xmlFilePath);
         if( args.length <= 0){
             System.out.println ("Command Args: [start/stop] [issue] [comment]");
-            System.out.println ("Command Args: [set] [ID] [timestamp]");
-            System.out.println ("Command Args: [del] [id]");
+            System.out.println ("Command Args: [set] [IssueID] [timestamp]");
+            System.out.println ("Command Args: [del] [IssueID]");
             System.out.println ("Command Args: [list]");
             return;
         }
