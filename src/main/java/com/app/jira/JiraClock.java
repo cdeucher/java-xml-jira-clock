@@ -1,8 +1,5 @@
 package com.app.jira;
 
-import org.w3c.dom.Element;
-
-import javax.xml.parsers.ParserConfigurationException;
 import java.util.List;
 import java.util.Map;
 
@@ -12,7 +9,7 @@ public class JiraClock {
     public static final String xmlFilePath = System.getProperty("user.dir")+"\\.jiraXmlfile.xml";
     public static final JiraDocument jiraDoc = JiraDocument.getInstance(xmlFilePath);
 
-    public static void main(String[] args) throws ParserConfigurationException {
+    public static void main(String[] args) {
         System.out.printf("Path: %s%n", xmlFilePath);
         if( args.length <= 0){
             System.out.println ("Command Args: [start/stop] [issue] [comment]");
