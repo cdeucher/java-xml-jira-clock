@@ -19,4 +19,4 @@ workflows:
       - build-and-test:
           post-steps:
             - jira/notify:
-                - environment_type: production
+                environment_type: production 
