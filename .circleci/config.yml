@@ -39,3 +39,4 @@ workflows:
           post-steps:
             - jira/notify:
                 environment_type: development 
+                token_name: ${CIRCLE_CI_TOKEN}
