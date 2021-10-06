@@ -39,6 +39,6 @@ workflows:
           post-steps:
             - jira/notify:
                 environment_type: development
-                scan_commit_body: true
+                scan_commit_body: false
                 issue_regexp: '[A-Z]{2,30}[0-9]-[0-9]+'
                 token_name: CIRCLE_CI_TOKEN
