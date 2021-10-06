@@ -38,5 +38,6 @@ workflows:
       - build-and-test:
           post-steps:
             - jira/notify:
-                environment_type: development 
+                environment_type: development
+                scan_commit_body: true 
                 token_name: CIRCLE_CI_TOKEN
