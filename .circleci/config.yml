@@ -39,5 +39,6 @@ workflows:
           post-steps:
             - jira/notify:
                 environment_type: development
-                scan_commit_body: true 
+                scan_commit_body: true
+                issue_regexp: JXJC 
                 token_name: CIRCLE_CI_TOKEN
