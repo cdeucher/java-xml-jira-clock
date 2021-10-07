@@ -8,8 +8,8 @@ executors:
     docker:
       - image: cimg/<< parameters.jdk-version >> 
 
-jobs:
-  check:
+jobs:         
+  build-test:  
     parameters:
       jdk-version:
         type: enum
@@ -18,19 +18,7 @@ jobs:
       enviromente:
         type: enum
         default: "development" 
-        enum: ["development","production"]          
-    executor:
-      name: container
-    steps:
-      - checkout  
-  test: 
-    executor:
-      name: container
-    steps:
-      - run:
-          name: test
-          command: mvn test
-  build:  
+        enum: ["development","production"]   
     executor:
       name: container 
     steps:
@@ -41,20 +29,24 @@ jobs:
       - run:
           name: test
           command: mvn test
-
+  deploy:
+    enviromente:
+      type: enum
+      default: "development" 
+      enum: ["development","production"]  
+    executor:
+      name: container
+    steps:
+      - run:
+          name: deploy
+          command: mvn verify
 workflows:
   java-xml-jira-clock: 
     jobs: 
-      - test:
-          post-steps:        
-           - jira/notify:
-             environment_type: << parameters.enviroment >>      
-      - build:
+      - build-test:    
           post-steps:
             - jira/notify:
-              environment_type: << parameters.enviroment >> 
-          requires: 
-            - test                 
+              environment_type: << parameters.enviroment >>               
       - deploy:
           post-steps:
             - jira/notify:
