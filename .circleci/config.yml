@@ -13,7 +13,7 @@ executors:
     parameters:
       jdk:
         type: string
-        default: ""  
+        default: "openjdk:11.0"  
     docker:
       - image: cimg/<< parameters.jdk >> 
 
