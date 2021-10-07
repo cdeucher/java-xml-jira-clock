@@ -2,20 +2,11 @@ version: 2.1
 
 orbs:
   jira: circleci/jira@1.3.1
-
-parameters:
-  jdk:
-    type: string
-    default: "openjdk:11.0"
-      
+    
 executors:
   container:
-    parameters:
-      jdk:
-        type: string
-        default: ""  
     docker:
-      - image: cimg/<< parameters.jdk >> 
+      - image: cimg/openjdk:11.0
 
 jobs:         
   build-test:   
@@ -29,6 +20,7 @@ jobs:
       - run:
           name: test
           command: mvn test
+          
   deploy:   
     executor:
       name: container
@@ -36,6 +28,8 @@ jobs:
       - run:
           name: deploy
           command: mvn verify
+
+
 workflows:
   java-xml-jira-clock: 
     jobs: 
