@@ -35,15 +35,13 @@ jobs:
 workflows:
   java-xml-jira-clock: 
     jobs: 
-      - build-test:
-          jira: 'jira-debug'   
+      - build-test:  
           post-steps:
             - jira/notify:
               environment_type: "development"
             - jira/notify:
               environment_type: "test"              
       - deploy:
-          jira: 'jira-prod'
           post-steps:
             - jira/notify:
               environment_type: "production"
