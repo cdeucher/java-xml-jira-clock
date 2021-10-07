@@ -42,6 +42,7 @@ workflows:
       - deploy:
           post-steps:
             - jira/notify:
+              job_type: deployment 
               environment_type: "production"
           type: approval 
           requires: 
