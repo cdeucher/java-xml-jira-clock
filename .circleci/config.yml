@@ -2,23 +2,19 @@ version: 2.1
 
 orbs:
   jira: circleci/jira@1.3.1
-  
+
+parameters:
+  jdk:
+    type: string
+    default: "openjdk:11.0"
+      
 executors:
   container: 
     docker:
-      - image: cimg/<< parameters.jdk-version >> 
+      - image: cimg/<< parameters.jdk >> 
 
 jobs:         
-  build-test:  
-    parameters:
-      jdk-version:
-        type: enum
-        default: "openjdk:11.0" 
-        enum: ["openjdk:11.0"]
-      enviromente:
-        type: enum
-        default: "development" 
-        enum: ["development","production"]   
+  build-test:   
     executor:
       name: container 
     steps:
@@ -29,11 +25,7 @@ jobs:
       - run:
           name: test
           command: mvn test
-  deploy:
-    enviromente:
-      type: enum
-      default: "development" 
-      enum: ["development","production"]  
+  deploy:   
     executor:
       name: container
     steps:
@@ -43,14 +35,18 @@ jobs:
 workflows:
   java-xml-jira-clock: 
     jobs: 
-      - build-test:    
+      - build-test:
+          jira: 'jira-debug'   
           post-steps:
             - jira/notify:
-              environment_type: << parameters.enviroment >>               
+              environment_type: "development"
+            - jira/notify:
+              environment_type: "test"              
       - deploy:
+          jira: 'jira-prod'
           post-steps:
             - jira/notify:
-              environment_type: << parameters.enviroment >>       
+              environment_type: "production"
           type: approval 
           requires: 
             - build                
