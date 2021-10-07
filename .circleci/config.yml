@@ -13,7 +13,7 @@ executors:
     parameters:
       jdk:
         type: string
-        default: "openjdk:11.0"  
+        default: ""  
     docker:
       - image: cimg/<< parameters.jdk >> 
 
@@ -51,4 +51,4 @@ workflows:
               environment_type: "production"
           type: approval 
           requires: 
-            - build                
+            - build-test                
