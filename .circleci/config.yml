@@ -1,0 +1,49 @@
+version: 2.1
+
+orbs:
+  jira: circleci/jira@1.3.1
+    
+executors:
+  container:
+    docker:
+      - image: cimg/openjdk:11.0
+
+jobs:         
+  build-test:   
+    executor:
+      name: container 
+    steps:
+      - checkout
+      - run:
+          name: Build
+          command: mvn -B -DskipTests clean package
+      - run:
+          name: test
+          command: mvn test
+          
+  deploy:   
+    executor:
+      name: container
+    steps:
+      - run:
+          name: deploy
+          command: mvn verify
+
+
+workflows:
+  java-xml-jira-clock: 
+    jobs: 
+      - build-test:  
+          post-steps:
+            - jira/notify:
+              environment_type: "development"
+            - jira/notify:
+              environment_type: "test"              
+      - deploy:
+          post-steps:
+            - jira/notify:
+              job_type: deployment 
+              environment_type: "production"
+          type: approval 
+          requires: 
+            - build-test                
